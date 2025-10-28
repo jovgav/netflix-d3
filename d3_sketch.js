@@ -587,6 +587,10 @@ function showTooltip(event, d) {
   // Get the bubble color
   const bubbleColor = languageColors[d['Language']] || '#808080';
   
+  // Add transparency to background color
+  const rgbColor = d3.color(bubbleColor);
+  const rgbaColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.85)`;
+  
   tooltip.html(`
     <strong>${d['Title']}</strong><br/>
     Language: ${d['Language']}<br/>
@@ -595,7 +599,8 @@ function showTooltip(event, d) {
   `)
     .style('left', (event.pageX + 20) + 'px')
     .style('top', (event.pageY - 10) + 'px')
-    .style('background-color', bubbleColor)
+    .style('background-color', rgbaColor)
+    .style('color', '#fff')
     .style('opacity', 1);
 }
 
