@@ -473,7 +473,6 @@ function init() {
     .append('div')
     .style('position', 'absolute')
     .style('opacity', 0)
-    .style('background-color', 'rgba(0, 0, 0, 0.8)')
     .style('color', '#fff')
     .style('padding', '10px')
     .style('border', '1px solid #fff')
@@ -585,6 +584,9 @@ function showTooltip(event, d) {
     individualGenres = [cleanGenre(genres)];
   }
   
+  // Get the bubble color
+  const bubbleColor = languageColors[d['Language']] || '#808080';
+  
   tooltip.html(`
     <strong>${d['Title']}</strong><br/>
     Language: ${d['Language']}<br/>
@@ -593,6 +595,7 @@ function showTooltip(event, d) {
   `)
     .style('left', (event.pageX + 20) + 'px')
     .style('top', (event.pageY - 10) + 'px')
+    .style('background-color', bubbleColor)
     .style('opacity', 1);
 }
 
