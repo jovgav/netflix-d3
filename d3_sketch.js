@@ -1,4 +1,3 @@
-// D3.js Netflix Visualization
 let netflixData = [];
 let languageColors = {};
 let maxHoursViewed = 0;
@@ -375,6 +374,7 @@ function mapRange(value, inMin, inMax, outMin, outMax) {
 
 function init() {
   const data = parseCSV(csvData);
+  netflixData = data; // Store data globally for language count
   processNetflixData(data);
   
   const width = window.innerWidth;
@@ -395,7 +395,7 @@ function init() {
     .style('fill', '#fff')
     .style('font-size', '28px')
     .style('font-family', "'Montserrat', Arial, sans-serif")
-    .text('Netflix TV Series by Language and Hours Viewed');
+    .text('Netflix TV Series by Language, Genre, and Hours Viewed');
   
   // Draw bubbles
   const bubbles = svg.selectAll('circle')
@@ -407,7 +407,7 @@ function init() {
     .attr('r', d => mapRange(parseFloat(d['Hours Viewed']), minHoursViewed, maxHoursViewed, 12, 60))
     .attr('fill', d => languageColors[d['Language']] || '#808080')
     .attr('opacity', d => {
-      if (!selectedGenre) return 1;
+      if (!selectedGenre) return 0.3;
       let genres = d['Genre'];
       let individualGenres = [];
       let cleanedGenreRaw = genres.replace(/^["']|["']$/g, '');
@@ -417,27 +417,45 @@ function init() {
       } else {
         individualGenres = [cleanGenre(genres).toLowerCase()];
       }
-      return individualGenres.includes(selectedGenre.toLowerCase()) ? 1 : 0.12;
+      return individualGenres.includes(selectedGenre.toLowerCase()) ? 1 : 0.15;
     })
     .style('cursor', 'pointer')
     .on('mouseover', function(event, d) {
-      d3.select(this).raise();
-      
-      // Add glow effect
-      let radius = mapRange(parseFloat(d['Hours Viewed']), minHoursViewed, maxHoursViewed, 12, 60);
-      for (let j = 5; j >= 0; j--) {
-        let glowSize = radius + (j * 8);
-        let glowAlpha = mapRange(j, 5, 0, 0.08, 0.31);
-        svg.append('circle')
-          .attr('cx', d.x)
-          .attr('cy', d.y)
-          .attr('r', glowSize)
-          .attr('fill', languageColors[d['Language']] || '#808080')
-          .attr('opacity', glowAlpha)
-          .attr('class', 'glow');
+      // Calculate bubble opacity to check if tooltip should be shown
+      let bubbleOpacity = 0.3;
+      if (selectedGenre) {
+        let genres = d['Genre'];
+        let individualGenres = [];
+        let cleanedGenreRaw = genres.replace(/^["']|["']$/g, '');
+        if (cleanedGenreRaw.startsWith('(') && cleanedGenreRaw.endsWith(')')) {
+          let innerContent = cleanedGenreRaw.slice(1, -1);
+          individualGenres = innerContent.split(',').map(g => cleanGenre(g).toLowerCase());
+        } else {
+          individualGenres = [cleanGenre(genres).toLowerCase()];
+        }
+        bubbleOpacity = individualGenres.includes(selectedGenre.toLowerCase()) ? 1 : 0.15;
       }
       
-      showTooltip(event, d);
+      // Only show tooltip and glow if bubble is at 100% opacity
+      if (bubbleOpacity === 1) {
+        d3.select(this).raise();
+        
+        // Add glow effect
+        let radius = mapRange(parseFloat(d['Hours Viewed']), minHoursViewed, maxHoursViewed, 12, 60);
+        for (let j = 5; j >= 0; j--) {
+          let glowSize = radius + (j * 8);
+          let glowAlpha = mapRange(j, 5, 0, 0.08, 0.31);
+          svg.append('circle')
+            .attr('cx', d.x)
+            .attr('cy', d.y)
+            .attr('r', glowSize)
+            .attr('fill', languageColors[d['Language']] || '#808080')
+            .attr('opacity', glowAlpha)
+            .attr('class', 'glow');
+        }
+        
+        showTooltip(event, d);
+      }
     })
     .on('mouseout', function() {
       d3.selectAll('.glow').remove();
@@ -481,7 +499,6 @@ function init() {
     .style('font-size', '12px')
     .style('font-family', "'Montserrat', Arial, sans-serif");
   
-  // Window resize handler
   window.addEventListener('resize', function() {
     const newWidth = window.innerWidth;
     const newHeight = window.innerHeight;
@@ -558,6 +575,13 @@ function drawLegend(width, height) {
   const startX = (width - (languages.length * spacing)) / 2;
   const startY = height - 30;
   
+  // Calculate show counts per language
+  const languageCounts = {};
+  netflixData.forEach(row => {
+    const lang = row['Language'];
+    languageCounts[lang] = (languageCounts[lang] || 0) + 1;
+  });
+  
   const legendItems = svg.selectAll('.legend-item')
     .data(languages)
     .enter()
@@ -570,7 +594,13 @@ function drawLegend(width, height) {
     .style('font-size', '14px')
     .style('font-family', "'Montserrat', Arial, sans-serif")
     .style('text-anchor', 'middle')
-    .text(d => d);
+    .style('cursor', 'pointer')
+    .text(d => d)
+    .on('mouseover', function(event, d) {
+      const count = languageCounts[d] || 0;
+      showLanguageTooltip(event, d, count);
+    })
+    .on('mouseout', hideLanguageTooltip);
 }
 
 function showTooltip(event, d) {
@@ -584,12 +614,19 @@ function showTooltip(event, d) {
     individualGenres = [cleanGenre(genres)];
   }
   
+  // Calculate bubble opacity 
+  let bubbleOpacity = 0.3;
+  if (selectedGenre) {
+    let genreMatches = individualGenres.map(g => g.toLowerCase()).includes(selectedGenre.toLowerCase());
+    bubbleOpacity = genreMatches ? 1 : 0.15;
+  }
+  
   // Get the bubble color
   const bubbleColor = languageColors[d['Language']] || '#808080';
   
-  // Add transparency to background color
+  // Add transparency to background color, multiplied by bubble opacity
   const rgbColor = d3.color(bubbleColor);
-  const rgbaColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.85)`;
+  const rgbaColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${0.85 * bubbleOpacity})`;
   
   tooltip.html(`
     <strong>${d['Title']}</strong><br/>
@@ -601,16 +638,33 @@ function showTooltip(event, d) {
     .style('top', (event.pageY - 10) + 'px')
     .style('background-color', rgbaColor)
     .style('color', '#fff')
-    .style('opacity', 1);
+    .style('opacity', bubbleOpacity);
 }
 
 function hideTooltip() {
   tooltip.style('opacity', 0);
 }
 
+function showLanguageTooltip(event, language, count) {
+  const bubbleColor = languageColors[language] || '#808080';
+  const rgbColor = d3.color(bubbleColor);
+  const rgbaColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.85)`;
+  
+  tooltip.html(`There are ${count} ${count === 1 ? 'show' : 'shows'} in this language`)
+    .style('left', (event.pageX + 20) + 'px')
+    .style('top', (event.pageY - 10) + 'px')
+    .style('background-color', rgbaColor)
+    .style('color', '#fff')
+    .style('opacity', 1);
+}
+
+function hideLanguageTooltip() {
+  tooltip.style('opacity', 0);
+}
+
 function updateVisualization() {
   d3.selectAll('circle').attr('opacity', d => {
-    if (!selectedGenre) return 1;
+    if (!selectedGenre) return 0.3;
     let genres = d['Genre'];
     let individualGenres = [];
     let cleanedGenreRaw = genres.replace(/^["']|["']$/g, '');
@@ -620,7 +674,7 @@ function updateVisualization() {
     } else {
       individualGenres = [cleanGenre(genres).toLowerCase()];
     }
-    return individualGenres.includes(selectedGenre.toLowerCase()) ? 1 : 0.12;
+    return individualGenres.includes(selectedGenre.toLowerCase()) ? 1 : 0.15;
   });
   
   d3.selectAll('.genre-group rect').attr('fill', d => 
